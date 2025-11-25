@@ -20,8 +20,8 @@ fn main() {
         ],
     }));
 
-    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
-    println!("服务器监听在 127.0.0.1:8080");
+    let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
+    println!("服务器监听在 0.0.0.0:8080");
 
     let clients: Arc<Mutex<HashMap<usize, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
     let mut client_counter = 0;

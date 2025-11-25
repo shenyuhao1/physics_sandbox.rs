@@ -13,9 +13,27 @@ use std::net::TcpStream;
 use std::io::{BufReader, BufRead, Write};
 
 fn main() {
+    use std::io::{self, Write};
     println!("启动物理客户端...");
-    
-    let stream = match TcpStream::connect("127.0.0.1:8080") {
+
+    print!("请输入服务器IP (默认127.0.0.1): ");
+    io::stdout().flush().unwrap();
+    let mut ip = String::new();
+    io::stdin().read_line(&mut ip).unwrap();
+    let ip = ip.trim();
+    let ip = if ip.is_empty() { "127.0.0.1" } else { ip };
+
+    print!("请输入端口 (默认8080): ");
+    io::stdout().flush().unwrap();
+    let mut port = String::new();
+    io::stdin().read_line(&mut port).unwrap();
+    let port = port.trim();
+    let port = if port.is_empty() { "8080" } else { port };
+
+    let addr = format!("{}:{}", ip, port);
+    println!("连接到服务器: {}", addr);
+
+    let stream = match TcpStream::connect(&addr) {
         Ok(s) => {
             println!("连接服务器成功");
             s

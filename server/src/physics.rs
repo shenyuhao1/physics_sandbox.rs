@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-#![allow(dead_code)]
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Vec2 {
     pub x: f32,

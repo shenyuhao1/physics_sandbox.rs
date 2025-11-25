@@ -185,4 +185,9 @@ pub enum ClientMessage {
         height: f32,
         mass: f32,
     },
+    AddCircle {
+        position: Vec2,
+        radius: f32,
+        mass: f32,
+    },
 }

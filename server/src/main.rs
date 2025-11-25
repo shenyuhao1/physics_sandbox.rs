@@ -101,6 +101,17 @@ fn handle_client_message(message: ClientMessage, world: Arc<Mutex<WorldState>>) 
                 println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
             }
         }
+        ClientMessage::AddCircle { position, radius, mass } => {
+            let mut world = world.lock().unwrap();
+            let new_id = world.bodies.iter().map(|b| b.id).max().unwrap_or(0) + 1;
+            let new_circle = RigidBody::new_circle(new_id, position, radius, mass);
+            world.bodies.push(new_circle);
+            println!("添加新圆，ID: {}, 位置: {:?}, 半径: {}", new_id, position, radius);
+            println!("当前物体列表:");
+            for b in &world.bodies {
+                println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
+            }
+        }
     }
 }
 

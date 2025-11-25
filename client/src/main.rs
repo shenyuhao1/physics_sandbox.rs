@@ -96,6 +96,7 @@ fn render_loop(
     let mut drag_body: Option<u32> = None;
     let mut drag_start = Vec2::zero();
     let mut add_rectangle_requested = false;
+    let mut add_circle_requested = false;
 
     let target_fps = 60;
     let frame_duration = Duration::from_nanos(1_000_000_000 / target_fps);
@@ -122,6 +123,12 @@ fn render_loop(
                     ..
                 } => {
                     add_rectangle_requested = true;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => {
+                    add_circle_requested = true;
                 }
                 Event::MouseButtonDown {
                     mouse_btn: MouseButton::Left,
@@ -200,6 +207,23 @@ fn render_loop(
                 let _ = w.flush();
             }
             add_rectangle_requested = false;
+        }
+        if add_circle_requested {
+            let mouse_state = event_pump.mouse_state();
+            let mouse_pos = Vec2::new(mouse_state.x() as f32, mouse_state.y() as f32);
+            let msg = ClientMessage::AddCircle {
+                position: mouse_pos,
+                radius: 30.0,
+                mass: 1.0,
+            };
+            let json = serde_json::to_string(&msg).unwrap();
+            let msg_str = format!("{}\n", json);
+            println!("发送添加圆请求: {}", msg_str);
+            if let Ok(mut w) = writer.lock() {
+                let _ = w.write_all(msg_str.as_bytes());
+                let _ = w.flush();
+            }
+            add_circle_requested = false;
         }
 
         canvas.set_draw_color(Color::RGB(20, 20, 40));

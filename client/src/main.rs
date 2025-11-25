@@ -283,7 +283,7 @@ fn draw_body(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, body: &Rigi
             draw_circle_fast(canvas, body.position, radius, body.mass);
         }
         Shape::Rectangle { width, height } => {
-            draw_rectangle(canvas, body.position, width, height, body.mass);
+            draw_rectangle_rotated(canvas, body.position, width, height, body.mass, body.angle);
         }
     }
     
@@ -328,23 +328,51 @@ fn draw_circle_fast(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, posi
     }
 }
 
-fn draw_rectangle(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, position: Vec2, width: f32, height: f32, mass: f32) {
-    let x = position.x as i32;
-    let y = position.y as i32;
-    let w = width as i32;
-    let h = height as i32;
-    
+fn draw_rectangle_rotated(
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    position: Vec2,
+    width: f32,
+    height: f32,
+    mass: f32,
+    angle: f32,
+) {
     let color = if mass > 1.5 {
         Color::RGB(250, 100, 100)
     } else {
         Color::RGB(100, 250, 100)
     };
-    
     canvas.set_draw_color(color);
-    
-    let rect = Rect::new(x - w/2, y - h/2, w as u32, h as u32);
-    canvas.fill_rect(rect).unwrap();
-    
+
+    // 计算四个角点
+    let hw = width / 2.0;
+    let hh = height / 2.0;
+    let corners = [
+        Vec2 { x: -hw, y: -hh },
+        Vec2 { x: hw, y: -hh },
+        Vec2 { x: hw, y: hh },
+        Vec2 { x: -hw, y: hh },
+    ];
+    let rotated: Vec<(i32, i32)> = corners
+        .iter()
+        .map(|c| {
+            let x = c.x * angle.cos() - c.y * angle.sin();
+            let y = c.x * angle.sin() + c.y * angle.cos();
+            ((position.x + x) as i32, (position.y + y) as i32)
+        })
+        .collect();
+
+    // 填充多边形（近似，先画边）
+    for i in 0..4 {
+        let (x1, y1) = rotated[i];
+        let (x2, y2) = rotated[(i + 1) % 4];
+        canvas.draw_line((x1, y1), (x2, y2)).ok();
+    }
+
+    // 画白色边框
     canvas.set_draw_color(Color::RGB(255, 255, 255));
-    canvas.draw_rect(rect).unwrap();
+    for i in 0..4 {
+        let (x1, y1) = rotated[i];
+        let (x2, y2) = rotated[(i + 1) % 4];
+        canvas.draw_line((x1, y1), (x2, y2)).ok();
+    }
 }

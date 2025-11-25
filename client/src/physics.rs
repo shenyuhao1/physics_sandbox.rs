@@ -75,6 +75,8 @@ pub struct RigidBody {
     pub velocity: Vec2,
     pub shape: Shape,
     pub mass: f32,
+    pub angle: f32,            // 角度（弧度）
+    pub angular_velocity: f32, // 角速度
 }
 
 impl RigidBody {
@@ -85,6 +87,8 @@ impl RigidBody {
             velocity: Vec2::zero(),
             shape: Shape::Circle { radius },
             mass,
+            angle: 0.0,
+            angular_velocity: 0.0,
         }
     }
 
@@ -95,6 +99,8 @@ impl RigidBody {
             velocity: Vec2::zero(),
             shape: Shape::Rectangle { width, height },
             mass,
+            angle: 0.0,
+            angular_velocity: 0.0,
         }
     }
 }

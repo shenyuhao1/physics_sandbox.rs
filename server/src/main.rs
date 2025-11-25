@@ -228,9 +228,20 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
                             world.bodies[i].velocity = world.bodies[i].velocity + impulse * (1.0 / mass_i);
                             world.bodies[j].velocity = world.bodies[j].velocity - impulse * (1.0 / mass_j);
                             
-                            // 添加一些角速度
-                            world.bodies[i].angular_velocity += impulse_magnitude * 0.001;
-                            world.bodies[j].angular_velocity -= impulse_magnitude * 0.001;
+                                // 真实角冲量计算（仅对矩形，近似碰撞点在边缘）
+                                for (idx, impulse_sign) in [(i, 1.0), (j, -1.0)] {
+                                    let body = &mut world.bodies[idx];
+                                    if let Shape::Rectangle { width, height } = body.shape {
+                                        // 冲量作用点到质心的矢量 r，近似用中心到对方中心的方向，长度取最小边一半
+                                        let r = (pos_j - pos_i).normalize() * (width.min(height) / 2.0);
+                                        // 2D叉积 tau = r x impulse
+                                        let tau = r.x * impulse.y - r.y * impulse.x;
+                                        let inertia = (1.0 / 12.0) * body.mass * (width * width + height * height);
+                                        if inertia > 0.0 {
+                                            body.angular_velocity += impulse_sign * tau / inertia;
+                                        }
+                                    }
+                                }
                         }
                     }
                 }

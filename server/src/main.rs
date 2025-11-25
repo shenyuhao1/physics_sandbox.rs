@@ -81,6 +81,7 @@ fn main() {
 }
 
 fn handle_client_message(message: ClientMessage, world: Arc<Mutex<WorldState>>) {
+    println!("收到客户端消息: {:?}", message);
     match message {
         ClientMessage::ApplyImpulse { body_id, impulse } => {
             let mut world = world.lock().unwrap();
@@ -95,6 +96,10 @@ fn handle_client_message(message: ClientMessage, world: Arc<Mutex<WorldState>>) 
             let new_rect = RigidBody::new_rectangle(new_id, position, width, height, mass);
             world.bodies.push(new_rect);
             println!("添加新矩形，ID: {}, 位置: {:?}", new_id, position);
+            println!("当前物体列表:");
+            for b in &world.bodies {
+                println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
+            }
         }
     }
 }

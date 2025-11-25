@@ -1,0 +1,68 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    
+        {
+            "name": "Debug executable 'client'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=client",
+                    "--package=client"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'client'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=client",
+                    "--package=client"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'server'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=server",
+                    "--package=server"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'server'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=server",
+                    "--package=server"
+                ]
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug server & client",
+            "configurations": [
+                "Debug executable 'server'",
+                "Debug executable 'client'"
+            ]
+        }
+    ]
+}

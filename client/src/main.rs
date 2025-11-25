@@ -53,6 +53,12 @@ fn network_loop(stream: TcpStream, world_state: Arc<Mutex<WorldState>>) {
                     if let Ok(state) = serde_json::from_str::<WorldState>(&line.trim()) {
                         let mut ws = world_state.lock().unwrap();
                         *ws = state;
+                        println!("收到新世界状态，物体数量: {}", ws.bodies.len());
+                        for b in &ws.bodies {
+                            println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
+                        }
+                    } else {
+                        println!("收到无法解析的世界状态: {}", line.trim());
                     }
                 }
             }
@@ -180,21 +186,18 @@ fn render_loop(
         if add_rectangle_requested {
             let mouse_state = event_pump.mouse_state();
             let mouse_pos = Vec2::new(mouse_state.x() as f32, mouse_state.y() as f32);
-            
             let msg = ClientMessage::AddRectangle {
                 position: mouse_pos,
                 width: 60.0,
                 height: 40.0,
                 mass: 1.0,
             };
-            
             let json = serde_json::to_string(&msg).unwrap();
             let msg_str = format!("{}\n", json);
-            
+            println!("发送添加矩形请求: {}", msg_str);
             if let Ok(mut w) = writer.lock() {
                 let _ = w.write_all(msg_str.as_bytes());
                 let _ = w.flush();
-                println!("发送添加矩形请求");
             }
             add_rectangle_requested = false;
         }

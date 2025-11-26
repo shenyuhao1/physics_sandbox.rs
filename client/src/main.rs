@@ -5,8 +5,9 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::mouse::MouseButton;
 use sdl2::pixels::Color;
-use sdl2::rect::Rect;
+use sdl2::image::LoadTexture;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::net::TcpStream;
@@ -68,15 +69,19 @@ fn network_loop(stream: TcpStream, world_state: Arc<Mutex<WorldState>>) {
             }
             Ok(_) => {
                 if !line.trim().is_empty() {
-                    if let Ok(state) = serde_json::from_str::<WorldState>(&line.trim()) {
-                        let mut ws = world_state.lock().unwrap();
-                        *ws = state;
-                        println!("收到新世界状态，物体数量: {}", ws.bodies.len());
-                        for b in &ws.bodies {
-                            println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
+                    match serde_json::from_str::<WorldState>(&line.trim()) {
+                        Ok(state) => {
+                            let mut ws = world_state.lock().unwrap();
+                            *ws = state;
+                            println!("收到新世界状态，物体数量: {}", ws.bodies.len());
+                            for b in &ws.bodies {
+                                println!("ID: {}, 位置: {:?}, 形状: {:?}", b.id, b.position, b.shape);
+                            }
                         }
-                    } else {
-                        println!("收到无法解析的世界状态: {}", line.trim());
+                        Err(e) => {
+                            println!("收到无法解析的世界状态: {}", line.trim());
+                            println!("解析错误: {:?}", e);
+                        }
                     }
                 }
             }
@@ -93,8 +98,8 @@ fn render_loop(
     writer: Arc<Mutex<TcpStream>>,
 ) {
     let sdl_context = sdl2::init().unwrap();
+    let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG | sdl2::image::InitFlag::JPG).unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-
     let window = video_subsystem
         .window("简单物理沙盒 - 按R添加矩形", 1200, 800)
         .position_centered()
@@ -107,7 +112,12 @@ fn render_loop(
         .present_vsync()
         .build()
         .unwrap();
-        
+
+    let texture_creator = canvas.texture_creator();
+    let background_texture = texture_creator
+        .load_texture("assets/background.png")
+        .expect("无法加载背景图片");
+
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut dragging = false;
@@ -118,6 +128,9 @@ fn render_loop(
 
     let target_fps = 60;
     let frame_duration = Duration::from_nanos(1_000_000_000 / target_fps);
+
+    // 拖尾轨迹：物体id -> 轨迹点
+    let mut trails: HashMap<u32, Vec<Vec2>> = HashMap::new();
 
     'running: loop {
         let frame_start = Instant::now();
@@ -156,7 +169,6 @@ fn render_loop(
                 } => {
                     let mouse_pos = Vec2::new(x as f32, y as f32);
                     let ws = world_state.lock().unwrap();
-                    
                     for body in &ws.bodies {
                         let delta = mouse_pos - body.position;
                         let is_clicked = match body.shape {
@@ -166,7 +178,6 @@ fn render_loop(
                                 delta.x.abs() <= width / 2.0 && delta.y.abs() <= height / 2.0
                             }
                         };
-                        
                         if is_clicked {
                             dragging = true;
                             drag_body = Some(body.id);
@@ -185,15 +196,12 @@ fn render_loop(
                         if let Some(body_id) = drag_body {
                             let mouse_pos = Vec2::new(x as f32, y as f32);
                             let impulse = (mouse_pos - drag_start) * 5.0;
-                            
                             let msg = ClientMessage::ApplyImpulse {
                                 body_id,
                                 impulse,
                             };
-                            
                             let json = serde_json::to_string(&msg).unwrap();
                             let msg_str = format!("{}\n", json);
-                            
                             if let Ok(mut w) = writer.lock() {
                                 let _ = w.write_all(msg_str.as_bytes());
                                 let _ = w.flush();
@@ -244,14 +252,37 @@ fn render_loop(
             add_circle_requested = false;
         }
 
-        canvas.set_draw_color(Color::RGB(20, 20, 40));
-        canvas.clear();
+        // 绘制背景贴图
+        canvas.copy(&background_texture, None, None).unwrap();
 
         let bodies = {
             let ws = world_state.lock().unwrap();
             ws.bodies.clone()
         };
-        
+
+        // 更新轨迹点
+        for body in &bodies {
+            let trail = trails.entry(body.id).or_insert(Vec::new());
+            trail.push(body.position);
+            if trail.len() > 30 {
+                trail.remove(0);
+            }
+        }
+
+        // 绘制拖尾
+        for body in &bodies {
+            if let Some(trail) = trails.get(&body.id) {
+                for w in trail.windows(2) {
+                    let p1 = w[0];
+                    let p2 = w[1];
+                    // 越靠后的点越透明
+                    let alpha = ((trail.len() as f32 - w[0..1].len() as f32) / trail.len() as f32 * 180.0 + 40.0) as u8;
+                    canvas.set_draw_color(sdl2::pixels::Color::RGBA(255, 255, 255, alpha));
+                    canvas.draw_line((p1.x as i32, p1.y as i32), (p2.x as i32, p2.y as i32)).ok();
+                }
+            }
+        }
+
         for body in &bodies {
             draw_body(&mut canvas, body);
         }
@@ -278,15 +309,63 @@ fn render_loop(
 }
 
 fn draw_body(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>, body: &RigidBody) {
+    let highlight = body.collision_frames > 0;
     match body.shape {
         Shape::Circle { radius } => {
             draw_circle_fast(canvas, body.position, radius, body.mass);
+            if highlight {
+                // 高亮描边
+                canvas.set_draw_color(Color::RGB(255, 255, 0));
+                for r in [radius as i32, (radius as i32) + 1] {
+                    let mut x = 0;
+                    let mut y = r;
+                    let mut d = 3 - 2 * r;
+                    let cx = body.position.x as i32;
+                    let cy = body.position.y as i32;
+                    while y >= x {
+                        for &(dx, dy) in &[(x, y), (-x, y), (x, -y), (-x, -y), (y, x), (-y, x), (y, -x), (-y, -x)] {
+                            canvas.draw_point((cx + dx, cy + dy)).ok();
+                        }
+                        if d < 0 {
+                            d = d + 4 * x + 6;
+                        } else {
+                            d = d + 4 * (x - y) + 10;
+                            y -= 1;
+                        }
+                        x += 1;
+                    }
+                }
+            }
         }
         Shape::Rectangle { width, height } => {
             draw_rectangle_rotated(canvas, body.position, width, height, body.mass, body.angle);
+            if highlight {
+                // 高亮描边
+                let hw = width / 2.0;
+                let hh = height / 2.0;
+                let corners = [
+                    Vec2 { x: -hw, y: -hh },
+                    Vec2 { x: hw, y: -hh },
+                    Vec2 { x: hw, y: hh },
+                    Vec2 { x: -hw, y: hh },
+                ];
+                let rotated: Vec<(i32, i32)> = corners
+                    .iter()
+                    .map(|c| {
+                        let x = c.x * body.angle.cos() - c.y * body.angle.sin();
+                        let y = c.x * body.angle.sin() + c.y * body.angle.cos();
+                        ((body.position.x + x) as i32, (body.position.y + y) as i32)
+                    })
+                    .collect();
+                canvas.set_draw_color(Color::RGB(255, 255, 0));
+                for i in 0..4 {
+                    let (x1, y1) = rotated[i];
+                    let (x2, y2) = rotated[(i + 1) % 4];
+                    canvas.draw_line((x1, y1), (x2, y2)).ok();
+                }
+            }
         }
     }
-    
     canvas.set_draw_color(Color::RGB(255, 255, 255));
     let velocity_end = body.position + body.velocity * 0.1;
     canvas.draw_line(

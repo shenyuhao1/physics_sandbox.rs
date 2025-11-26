@@ -90,6 +90,7 @@ pub struct RigidBody {
     pub mass: f32,
     pub angle: f32,        // 角度（弧度）
     pub angular_velocity: f32, // 角速度
+    pub collision_frames: u8, // 碰撞特效帧数
 }
 
 impl RigidBody {
@@ -102,6 +103,7 @@ impl RigidBody {
             mass,
             angle: 0.0,
             angular_velocity: 0.0,
+            collision_frames: 0,
         }
     }
 
@@ -114,6 +116,7 @@ impl RigidBody {
             mass,
             angle: 0.0,
             angular_velocity: 0.0,
+            collision_frames: 0,
         }
     }
 

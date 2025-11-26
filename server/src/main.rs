@@ -128,13 +128,10 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
             for body in &mut world.bodies {
                 // 重力
                 body.velocity.y += 98.0 * fixed_dt;
-                
                 // 更新位置
                 body.position = body.position + body.velocity * fixed_dt;
-                
                 // 更新角度
                 body.angle += body.angular_velocity * fixed_dt;
-                
                 // 边界碰撞检测 - 根据形状类型
                 match body.shape {
                     Shape::Circle { radius } => {
@@ -145,7 +142,6 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
                             body.position.x = 1200.0 - radius;
                             body.velocity.x = -body.velocity.x * 0.8;
                         }
-                        
                         if body.position.y - radius < 0.0 {
                             body.position.y = radius;
                             body.velocity.y = -body.velocity.y * 0.8;
@@ -155,21 +151,17 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
                         }
                     }
                     Shape::Rectangle { width, height } => {
-                        // 简化的矩形边界碰撞（不考虑旋转）
                         let half_width = width / 2.0;
                         let half_height = height / 2.0;
-                        
                         if body.position.x - half_width < 0.0 {
                             body.position.x = half_width;
                             body.velocity.x = -body.velocity.x * 0.8;
-                            // 添加一些角速度使碰撞更有趣
                             body.angular_velocity += body.velocity.y * 0.01;
                         } else if body.position.x + half_width > 1200.0 {
                             body.position.x = 1200.0 - half_width;
                             body.velocity.x = -body.velocity.x * 0.8;
                             body.angular_velocity += body.velocity.y * 0.01;
                         }
-                        
                         if body.position.y - half_height < 0.0 {
                             body.position.y = half_height;
                             body.velocity.y = -body.velocity.y * 0.8;
@@ -181,10 +173,13 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
                         }
                     }
                 }
-                
                 // 阻尼
                 body.velocity = body.velocity * 0.995;
                 body.angular_velocity *= 0.99; // 角速度阻尼
+                // 碰撞特效帧数递减
+                if body.collision_frames > 0 {
+                    body.collision_frames -= 1;
+                }
             }
             
             // 简化的碰撞检测
@@ -199,49 +194,41 @@ fn simulation_loop(world: Arc<Mutex<WorldState>>, clients: Arc<Mutex<HashMap<usi
                     let mass_j = world.bodies[j].mass;
                     let shape_i = world.bodies[i].shape;
                     let shape_j = world.bodies[j].shape;
-                    
                     let (min_i, max_i) = get_bounding_box_from_data(pos_i, shape_i);
                     let (min_j, max_j) = get_bounding_box_from_data(pos_j, shape_j);
-                    
                     if max_i.x >= min_j.x && min_i.x <= max_j.x &&
                        max_i.y >= min_j.y && min_i.y <= max_j.y {
                         let normal = (pos_i - pos_j).normalize();
                         let overlap = calculate_overlap_from_data(pos_i, shape_i, pos_j, shape_j);
-                        
                         if overlap > 0.0 {
+                            // 设置碰撞特效帧数
+                            world.bodies[i].collision_frames = 10;
+                            world.bodies[j].collision_frames = 10;
                             world.bodies[i].position = world.bodies[i].position + normal * (overlap * 0.5);
                             world.bodies[j].position = world.bodies[j].position - normal * (overlap * 0.5);
-                            
                             let relative_velocity = vel_i - vel_j;
                             let velocity_along_normal = relative_velocity.x * normal.x + relative_velocity.y * normal.y;
-                            
                             if velocity_along_normal > 0.0 {
                                 continue;
                             }
-                            
                             let restitution = 0.8;
                             let mut impulse_magnitude = -(1.0 + restitution) * velocity_along_normal;
                             impulse_magnitude /= 1.0 / mass_i + 1.0 / mass_j;
-                            
                             let impulse = normal * impulse_magnitude;
-                            
                             world.bodies[i].velocity = world.bodies[i].velocity + impulse * (1.0 / mass_i);
                             world.bodies[j].velocity = world.bodies[j].velocity - impulse * (1.0 / mass_j);
-                            
-                                // 真实角冲量计算（仅对矩形，近似碰撞点在边缘）
-                                for (idx, impulse_sign) in [(i, 1.0), (j, -1.0)] {
-                                    let body = &mut world.bodies[idx];
-                                    if let Shape::Rectangle { width, height } = body.shape {
-                                        // 冲量作用点到质心的矢量 r，近似用中心到对方中心的方向，长度取最小边一半
-                                        let r = (pos_j - pos_i).normalize() * (width.min(height) / 2.0);
-                                        // 2D叉积 tau = r x impulse
-                                        let tau = r.x * impulse.y - r.y * impulse.x;
-                                        let inertia = (1.0 / 12.0) * body.mass * (width * width + height * height);
-                                        if inertia > 0.0 {
-                                            body.angular_velocity += impulse_sign * tau / inertia;
-                                        }
+                            // 真实角冲量计算（仅对矩形，近似碰撞点在边缘）
+                            for (idx, impulse_sign) in [(i, 1.0), (j, -1.0)] {
+                                let body = &mut world.bodies[idx];
+                                if let Shape::Rectangle { width, height } = body.shape {
+                                    let r = (pos_j - pos_i).normalize() * (width.min(height) / 2.0);
+                                    let tau = r.x * impulse.y - r.y * impulse.x;
+                                    let inertia = (1.0 / 12.0) * body.mass * (width * width + height * height);
+                                    if inertia > 0.0 {
+                                        body.angular_velocity += impulse_sign * tau / inertia;
                                     }
                                 }
+                            }
                         }
                     }
                 }
